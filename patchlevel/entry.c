@@ -1,3 +1,5 @@
+/* Modified by Sliver Armory contributors to report connection errors safely. */
+
 #include <windows.h>
 #include "../beacon.h"
 
@@ -22,8 +24,9 @@ VOID go(
     DWORD size;
 
     // Connect to remote registry
-    if (RegConnectRegistryA(hostname, HKEY_LOCAL_MACHINE, &hRemoteHKLM) != ERROR_SUCCESS) {
-        BeaconPrintf(CALLBACK_ERROR, "RegConnectRegistry failed: 0x%08x. Are you a domain-joined user and is RRP running?");
+    LONG result = RegConnectRegistryA(hostname, HKEY_LOCAL_MACHINE, &hRemoteHKLM);
+    if (result != ERROR_SUCCESS) {
+        BeaconPrintf(CALLBACK_ERROR, "RegConnectRegistry failed: 0x%08x. Are you a domain-joined user and is RRP running?", result);
         return;
     }
 

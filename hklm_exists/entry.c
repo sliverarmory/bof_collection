@@ -1,3 +1,5 @@
+/* Modified by Sliver Armory contributors to fail safely on connection errors. */
+
 #include <windows.h>
 #include <stdio.h>
 #include "../beacon.h"
@@ -30,6 +32,7 @@ VOID go(
 
     if (result != ERROR_SUCCESS) {
         BeaconPrintf(CALLBACK_ERROR, "RegConnectRegistry failed: 0x%08x. Are you a domain-joined user and is RRP running?", result);
+        return;
     }
 
     // Sanity check: ensure that we are not able to open the key
