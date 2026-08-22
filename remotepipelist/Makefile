@@ -10,7 +10,8 @@ all:
 	@mkdir -p dist build
 	$(CC_x64) $(CFLAGS) -o build/entry.x64.o entry.c
 	$(BOFLINK) -L$(MINGW_LIBDIR) build/entry.x64.o --entry=go \
-		-lkernel32 -lmsvcrt -lws2_32 -lsecur32 -lbcrypt -o dist/$(BOFNAME).x64.o
+		-lkernel32 -lmsvcrt -lws2_32 -lsecur32 -lbcrypt -lmingwex \
+		-o dist/$(BOFNAME).x64.o
 
 clean:
 	rm -rf dist build

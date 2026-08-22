@@ -1,8 +1,36 @@
-/* Modified by Sliver Armory contributors to fail safely on connection errors. */
+/* Modified by Sliver Armory contributors for bounded inputs and safe failures. */
 
 #include <windows.h>
-#include <stdio.h>
 #include "../beacon.h"
+
+static BOOL format_remote_name(
+    const char *hostname,
+    int hostname_size,
+    char *remote_name,
+    SIZE_T remote_name_size
+)
+{
+    SIZE_T hostname_length = 0;
+
+    if (hostname == NULL || hostname_size <= 0 || remote_name_size < 3) {
+        return FALSE;
+    }
+    while (hostname_length < (SIZE_T)hostname_size && hostname[hostname_length] != '\0') {
+        hostname_length++;
+    }
+    if (hostname_length == 0 || hostname_length >= (SIZE_T)hostname_size ||
+        hostname_length > remote_name_size - 3) {
+        return FALSE;
+    }
+
+    remote_name[0] = '\\';
+    remote_name[1] = '\\';
+    for (SIZE_T index = 0; index < hostname_length; index++) {
+        remote_name[index + 2] = hostname[index];
+    }
+    remote_name[hostname_length + 2] = '\0';
+    return TRUE;
+}
 
 VOID go(
     IN PCHAR Buffer,
@@ -12,14 +40,22 @@ VOID go(
     datap parser = {0};
     const char* hostname = NULL;
     const char* key = NULL;
+    int hostname_size = 0;
     BeaconDataParse(&parser, Buffer, Length);
-    hostname = BeaconDataExtract(&parser, NULL);
+    hostname = BeaconDataExtract(&parser, &hostname_size);
     key = BeaconDataExtract(&parser, NULL);
 
     char remoteName[256];
 
     // Prepend "\\" for UNC format
-    snprintf(remoteName, sizeof(remoteName), "\\\\%s", hostname);
+    if (!format_remote_name(hostname, hostname_size, remoteName, sizeof(remoteName))) {
+        BeaconPrintf(CALLBACK_ERROR, "Hostname is missing, malformed, or too long.");
+        return;
+    }
+    if (key == NULL || key[0] == '\0') {
+        BeaconPrintf(CALLBACK_ERROR, "Registry key is required.");
+        return;
+    }
 
     HKEY hRemoteBase = NULL;
 
