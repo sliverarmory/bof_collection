@@ -81,7 +81,7 @@ jobs:
             "$compiler_version" "$compiler_target"
           test "$compiler_alternative" = /usr/bin/x86_64-w64-mingw32-gcc-win32
           test "$compiler_thread_model" = win32
-          test "$compiler_version" = 13.2.0
+          test "$compiler_version" = 13-win32
           test "$compiler_target" = x86_64-w64-mingw32
           for spec in "${packages[@]}"; do
             package="${spec%%=*}"
