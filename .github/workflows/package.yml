@@ -193,7 +193,11 @@ jobs:
             echo "Tag commit is not contained in origin/master" >&2
             exit 1
           fi
-          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          existing_release_id="$(gh api \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id")"
+          if [[ -n "$existing_release_id" ]]; then
             echo "Release $GITHUB_REF_NAME already exists" >&2
             exit 1
           fi
@@ -245,6 +249,7 @@ jobs:
             --tag "$GITHUB_REF_NAME"
 
       - name: Stage draft release
+        id: stage_release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -259,28 +264,58 @@ jobs:
             --title "$PACKAGE_BASENAME $GITHUB_REF_NAME" \
             --notes "Signed Sliver Armory package built from commit $GITHUB_SHA."
 
+          release_id="$(gh api \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\" and .draft == true) | .id")"
+          if [[ ! "$release_id" =~ ^[0-9]+$ ]]; then
+            echo "Could not resolve the staged draft release ID" >&2
+            exit 1
+          fi
+          printf 'release_id=%s\n' "$release_id" >> "$GITHUB_OUTPUT"
+
       - name: Verify staged release assets
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          release_id="${{ steps.stage_release.outputs.release_id }}"
+          release_api="repos/$GITHUB_REPOSITORY/releases/$release_id"
           draft_dir="$RUNNER_TEMP/draft-release"
           mkdir -p "$draft_dir"
-          gh release download "$GITHUB_REF_NAME" \
-            --repo "$GITHUB_REPOSITORY" \
-            --pattern "$PACKAGE_BASENAME.*" \
-            --dir "$draft_dir"
+
+          test "$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "$release_api" --jq .tag_name)" = "$GITHUB_REF_NAME"
+          test "$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "$release_api" --jq .draft)" = true
+
+          expected_assets='["beune-bof-collection.minisig","beune-bof-collection.tar.gz"]'
+          assets_api="$release_api/assets"
+          actual_assets="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "$assets_api" --jq '[.[].name] | sort')"
+          test "$actual_assets" = "$expected_assets"
+
+          for asset in "$PACKAGE_BASENAME.tar.gz" "$PACKAGE_BASENAME.minisig"; do
+            asset_id="$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "$assets_api" --jq ".[] | select(.name == \"$asset\") | .id")"
+            if [[ ! "$asset_id" =~ ^[0-9]+$ ]]; then
+              echo "Could not resolve staged asset ID for $asset" >&2
+              exit 1
+            fi
+            gh api \
+              -H 'Accept: application/octet-stream' \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" \
+              > "$draft_dir/$asset"
+          done
+
           cmp \
             "release/$PACKAGE_BASENAME.tar.gz" \
             "$draft_dir/$PACKAGE_BASENAME.tar.gz"
           cmp \
             "release/$PACKAGE_BASENAME.minisig" \
             "$draft_dir/$PACKAGE_BASENAME.minisig"
-          test "$(gh api \
-            -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
-            --jq .draft)" = true
 
       - name: Publish immutable release
         shell: bash
@@ -288,10 +323,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release edit "$GITHUB_REF_NAME" \
-            --repo "$GITHUB_REPOSITORY" \
-            --draft=false \
-            --latest
+          release_id="${{ steps.stage_release.outputs.release_id }}"
+          release_api="repos/$GITHUB_REPOSITORY/releases/$release_id"
+          gh api --method PATCH \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "$release_api" \
+            -F draft=false \
+            -f make_latest=true \
+            --silent
+          test "$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "$release_api" --jq .draft)" = false
 
       - name: Verify public release assets anonymously
         shell: bash
