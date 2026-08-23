@@ -7,6 +7,8 @@ LIBINCLUDE :=
 CC_x64 := x86_64-w64-mingw32-gcc -nostdlib
 CXX_x64 := x86_64-w64-mingw32-g++
 BOFLINK := boflink
+# Modified by Sliver Armory contributors for portable MinGW library discovery.
+MINGW_LIBDIR ?= $(dir $(shell $(CC_x64) -print-file-name=libkernel32.a))
 
 # CFLAGS for BOF compatibility
 # -fno-builtin: Prevents GCC from replacing calls with __mingw_ equivalents
@@ -28,7 +30,7 @@ all: clean dist/$(BOFNAME).x64.o
 
 dist/$(BOFNAME).x64.o: $(OBJS_x64)
 	@mkdir -p dist
-	$(BOFLINK) -L/usr/x86_64-w64-mingw32/lib $(OBJS_x64) --entry=go -lkernel32 -lmsvcrt -lntdll -ladvapi32 -lucrt -lgdi32 -luser32 -lws2_32 -lshell32 -lcomdlg32 -lole32 -loleaut32 -luuid -lwininet -lcrypt32 -ldbghelp -lversion -lsetupapi -o $@
+	$(BOFLINK) -L$(MINGW_LIBDIR) $(OBJS_x64) --entry=go -lkernel32 -lmsvcrt -lntdll -ladvapi32 -lucrt -lgdi32 -luser32 -lws2_32 -lshell32 -lcomdlg32 -lole32 -loleaut32 -luuid -lwininet -lcrypt32 -ldbghelp -lversion -lsetupapi -o $@
 
 # Compilation stage for entry.c
 $(ENTRY_OBJ_x64): entry.c

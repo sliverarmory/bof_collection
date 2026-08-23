@@ -1,4 +1,7 @@
 /*
+ * Modified from Cobalt-Strike/bof_template by Pim Beune.
+ * See LICENSE and NOTICE for license and provenance details.
+ *
  * Beacon Object Files (BOF)
  * -------------------------
  * A Beacon Object File is a light-weight post exploitation tool that runs

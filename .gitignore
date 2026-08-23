@@ -2,3 +2,7 @@
 build
 dist
 compile_commands.json
+# Added by Sliver Armory contributors for package tooling.
+release
+__pycache__
+minisign.key

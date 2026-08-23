@@ -1,6 +1,7 @@
 /*
  * RemotePipeList - list remote named pipes via SMB2 on IPC$
  * Self-contained SMB2 2.0.2 client with Windows SSPI (current credentials).
+ * Modified by Sliver Armory contributors for robust output allocation handling.
  */
 
 #define WIN32_LEAN_AND_MEAN
@@ -1058,20 +1059,27 @@ VOID go(IN PCHAR Buffer, IN ULONG Length)
         return;
     }
 
-    bofstart();
+    if (!bofstart()) {
+        BeaconPrintf(CALLBACK_ERROR, "Error: failed to allocate output buffer\n");
+        WSACleanup();
+        return;
+    }
 
     memset(&ctx, 0, sizeof(ctx));
     ctx.sock = INVALID_SOCKET;
     ctx.last_error[0] = '\0';
 
-    if (list_remote_pipes(&ctx, host) == 0) {
+    if (list_remote_pipes(&ctx, host) == 0 && !outputfailed) {
         printoutput(TRUE);
     } else {
         if (output) {
             intFree(output);
             output = NULL;
         }
-        print_error(&ctx, "connect");
+        if (outputfailed)
+            BeaconPrintf(CALLBACK_ERROR, "Error: failed to allocate formatted output\n");
+        else
+            print_error(&ctx, "connect");
     }
 
     WSACleanup();

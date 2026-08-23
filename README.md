@@ -2,6 +2,9 @@
 
 Collection of Beacon Object Files (BOFs) that I wrote.
 
+This project is licensed under the [Apache License 2.0](./LICENSE). See
+[NOTICE](./NOTICE) for attribution and retained research acknowledgements.
+
 ## Table of Contents
 
 * [`hklm_exists`](#hklm_exists)
@@ -89,6 +92,22 @@ Abuses a kASLR leak together with R/W primitive in RTCore64.sys to steal a SYSTE
 # Compilation instructions
 
 Other than your usual MinGW compiler, this repo requires [boflink](https://github.com/MEhrn00/boflink) in `$PATH`. Other than that, just run `make`!
+
+## Sliver Armory packaging
+
+[`extension.json`](./extension.json) exposes the seven x64 BOFs as one
+multi-command Sliver extension. It declares Windows/amd64 support and requires
+the `coff-loader` extension. The upstream `cat` command is registered as
+`bof-cat` to avoid colliding with Sliver's built-in `cat` command.
+The manifest identity is `beaconinfo` so current Sliver clients can resolve
+updates for the shared multi-command package; `package_name` keeps all seven
+commands installed together under `beune-bof-collection`.
+
+Release packaging builds with `make`, copies each `*/dist/*.x64.o` artifact to
+the archive root beside `extension.json`, `LICENSE`, and `NOTICE`, and replaces
+only the staged manifest's `v0.0.0` placeholder with the release tag. Build
+outputs and release staging directories are not source files and must not be
+committed.
 
 ---
 
