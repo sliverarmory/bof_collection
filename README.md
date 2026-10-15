@@ -113,6 +113,8 @@ The Sliver BOF end-to-end workflow builds `cat` and `beaconinfo` with the pinned
 package toolchain, then runs them through the legacy COFF loader in session and
 beacon implants. `cat` reads only a temporary test fixture. The remote registry,
 SMB, and driver proof-of-concept BOFs are outside this hosted-runner test.
+The workflow checks out the test runner at a fixed commit and invokes its CLI
+because this repository permits only GitHub-owned Actions.
 
 ---
 

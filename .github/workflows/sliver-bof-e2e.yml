@@ -9,8 +9,138 @@ permissions:
   contents: read
 
 jobs:
-  bof-e2e:
-    uses: sliverarmory/sliver-test-bof/.github/workflows/e2e.yml@b38a09a226bf861a1e56e9dbe07838fe99138582
-    with:
-      manifest: .github/sliver-bof-e2e.yml
-      prepare-command: bash scripts/prepare-sliver-bof-e2e.sh
+  plan:
+    name: Build and plan BOF tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      resolved-sliver: ${{ steps.plan.outputs.resolved-sliver }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Check out pinned Sliver test runner
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: sliverarmory/sliver-test-bof
+          ref: b38a09a226bf861a1e56e9dbe07838fe99138582
+          path: .sliver-test-bof
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: 1.26.6
+          cache: false
+      - name: Build packaged BOF objects
+        shell: bash
+        env:
+          SLIVER_BOF_E2E_PHASE: plan
+        run: bash scripts/prepare-sliver-bof-e2e.sh
+      - name: Plan test and stage validated objects
+        id: plan
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git -C .sliver-test-bof rev-parse HEAD)" = b38a09a226bf861a1e56e9dbe07838fe99138582
+          (cd .sliver-test-bof && go build -o "$RUNNER_TEMP/sliver-bof-e2e" ./cmd/sliver-bof-e2e)
+          "$RUNNER_TEMP/sliver-bof-e2e" plan \
+            --workspace "$GITHUB_WORKSPACE" \
+            --manifest .github/sliver-bof-e2e.yml \
+            --objects-dir "$RUNNER_TEMP/sliver-bof-e2e-objects" \
+            --results-dir "$RUNNER_TEMP/sliver-bof-e2e-plan" \
+            --github-output "$GITHUB_OUTPUT" \
+            --action-version sliverarmory/sliver-test-bof@b38a09a226bf861a1e56e9dbe07838fe99138582
+      - name: Upload validated BOF objects
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sliver-bof-e2e-objects
+          path: ${{ runner.temp }}/sliver-bof-e2e-objects
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 7
+
+  test:
+    name: Execute BOFs through Sliver on Windows/amd64
+    needs: plan
+    runs-on: windows-2025
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Check out pinned Sliver test runner
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: sliverarmory/sliver-test-bof
+          ref: b38a09a226bf861a1e56e9dbe07838fe99138582
+          path: .sliver-test-bof
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sliver-bof-e2e-objects
+          path: ${{ runner.temp }}/sliver-bof-e2e-objects
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: 1.26.6
+          cache: false
+      - name: Build controller and acquire Sliver
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git -C .sliver-test-bof rev-parse HEAD)" = b38a09a226bf861a1e56e9dbe07838fe99138582
+          (cd .sliver-test-bof && go build -o "$RUNNER_TEMP/sliver-bof-e2e.exe" ./cmd/sliver-bof-e2e)
+          "$RUNNER_TEMP/sliver-bof-e2e.exe" prepare \
+            --workspace "$GITHUB_WORKSPACE" \
+            --manifest .github/sliver-bof-e2e.yml \
+            --object-root "$RUNNER_TEMP/sliver-bof-e2e-objects" \
+            --results-dir "$RUNNER_TEMP/sliver-bof-e2e-results" \
+            --target windows/amd64 \
+            --sliver-version '${{ needs.plan.outputs.resolved-sliver }}' \
+            --action-version sliverarmory/sliver-test-bof@b38a09a226bf861a1e56e9dbe07838fe99138582 \
+            --prepared "$RUNNER_TEMP/sliver-bof-e2e-private/prepared.json"
+      - name: Run BOFs with credentials removed
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SLIVER_BOF_ACTION_ROOT="$PWD/.sliver-test-bof"
+          export SLIVER_BOF_CONTROLLER="$RUNNER_TEMP/sliver-bof-e2e.exe"
+          export SLIVER_BOF_MANIFEST=.github/sliver-bof-e2e.yml
+          export SLIVER_BOF_TARGET=windows/amd64
+          export SLIVER_BOF_OBJECT_ROOT="$RUNNER_TEMP/sliver-bof-e2e-objects"
+          export SLIVER_BOF_SLIVER_VERSION='${{ needs.plan.outputs.resolved-sliver }}'
+          export SLIVER_BOF_RESULTS_DIR="$RUNNER_TEMP/sliver-bof-e2e-results"
+          export SLIVER_BOF_ACTION_VERSION=sliverarmory/sliver-test-bof@b38a09a226bf861a1e56e9dbe07838fe99138582
+          export SLIVER_BOF_PREPARED_FILE="$RUNNER_TEMP/sliver-bof-e2e-private/prepared.json"
+          export SLIVER_BOF_STATE_FILE="$RUNNER_TEMP/sliver-bof-e2e-private/state.json"
+          bash .sliver-test-bof/dist/run-prepared.sh
+      - name: Aggregate results
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/sliver-bof-e2e.exe" aggregate \
+            --workspace "$GITHUB_WORKSPACE" \
+            --manifest .github/sliver-bof-e2e.yml \
+            --object-root "$RUNNER_TEMP/sliver-bof-e2e-objects" \
+            --results-dir "$RUNNER_TEMP/sliver-bof-e2e-results"
+      - name: Upload results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sliver-bof-e2e-results
+          path: ${{ runner.temp }}/sliver-bof-e2e-results
+          if-no-files-found: error
+          retention-days: 7
+      - name: Clean up Sliver state
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SLIVER_BOF_ACTION_ROOT="$PWD/.sliver-test-bof"
+          export SLIVER_BOF_NODE="$(command -v node)"
+          export SLIVER_BOF_PREPARED_DIR="$RUNNER_TEMP/sliver-bof-e2e-private"
+          export SLIVER_BOF_STATE_FILE="$RUNNER_TEMP/sliver-bof-e2e-private/state.json"
+          bash .sliver-test-bof/dist/cleanup.sh
