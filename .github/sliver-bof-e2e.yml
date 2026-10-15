@@ -1,0 +1,33 @@
+schema: sliver-bof-e2e/v1
+
+sliver:
+  version: b19e383111dbf8b04096806b249f6238274edff4
+
+fixtures:
+  file:
+    variable: FIXTURE_FILE
+    contents_utf8: "sliver-bof-e2e fixture\n"
+
+defaults:
+  bof_executor: coff-loader
+  entrypoint: go
+  modes: [session, beacon]
+  command_timeout: 2m
+
+suites:
+  - name: windows-amd64
+    target: {os: windows, arch: amd64}
+    tests:
+      - name: cat-fixture
+        object: cat/dist/cat.x64.o
+        args:
+          - {type: string, value: '${FIXTURE_FILE}'}
+        expect:
+          output:
+            contains: [sliver-bof-e2e fixture]
+
+      - name: beaconinfo
+        object: beaconinfo/dist/beaconinfo.x64.o
+        expect:
+          output:
+            contains: ['Beacon start address:', 'BeaconPrintf is at:']
