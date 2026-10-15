@@ -109,6 +109,11 @@ only the staged manifest's `v0.0.0` placeholder with the release tag. Build
 outputs and release staging directories are not source files and must not be
 committed.
 
+The Sliver BOF end-to-end workflow builds `cat` and `beaconinfo` with the pinned
+package toolchain, then runs them through the legacy COFF loader in session and
+beacon implants. `cat` reads only a temporary test fixture. The remote registry,
+SMB, and driver proof-of-concept BOFs are outside this hosted-runner test.
+
 ---
 
 **DISCLAIMER:** The creators and contributors of this repository accept no liability for any loss, damage, or consequences resulting from the use of the information or code contained in this repo. By utilizing this repo, you acknowledge and accept full responsibility for your actions. Use at your own risk.
